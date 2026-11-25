@@ -13,7 +13,7 @@
 # ../../../dashboard-v2/packages/*.
 
 # The output is static files, so build once on the host's platform rather than under emulation.
-FROM --platform=$BUILDPLATFORM node:24-slim AS build
+FROM --platform=$BUILDPLATFORM node:25-slim AS build
 RUN npm install --global pnpm@12.16.1
 WORKDIR /work
 
