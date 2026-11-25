@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  # The smoke job needs the dashboard dev stack and only runs when started by hand.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      # make check runs tidy-check (go mod tidy -diff for the root and tools modules), formatting,
+      # golangci-lint and go test -race.
+      - run: make check
+      - run: make vuln
+
+  # The addon UI links the dashboard's SDK and UI packages from source by the relative path
+  # ../../../dashboard-v2/packages/*, so both repositories are checked out side by side at the
+  # commit pinned in DASHBOARD_REF.
+  addon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: oakestra-openai-api
+
+      - id: ref
+        run: echo "ref=$(cat oakestra-openai-api/DASHBOARD_REF)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: oakestra/dashboard-v2
+          ref: ${{ steps.ref.outputs.ref }}
+          path: dashboard-v2
+          # A private dashboard repo needs a PAT with read access in DASHBOARD_REPO_TOKEN; the
+          # default token only covers this repo.
+          token: ${{ secrets.DASHBOARD_REPO_TOKEN || github.token }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: oakestra-openai-api/frontend/addon/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            dashboard-v2/pnpm-lock.yaml
+            oakestra-openai-api/frontend/addon/pnpm-lock.yaml
+      - name: Install dashboard packages
+        working-directory: dashboard-v2
+        run: pnpm install --frozen-lockfile --filter "@oakestra/dashboard-sdk..." --filter "@oakestra/ui..."
+      - name: Addon checks
+        working-directory: oakestra-openai-api/frontend/addon
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
+  # Manual only: brings up the dashboard dev stack (mock system manager and addons manager), then
+  # this repo's compose.yaml with the fake Oakestra, and runs deploy/smoke.sh. Both checkouts sit
+  # side by side because compose.yaml builds the UI from ../dashboard-v2.
+  smoke:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [checks, addon]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: oakestra-openai-api
+
+      - id: ref
+        run: echo "ref=$(cat oakestra-openai-api/DASHBOARD_REF)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: oakestra/dashboard-v2
+          ref: ${{ steps.ref.outputs.ref }}
+          path: dashboard-v2
+          token: ${{ secrets.DASHBOARD_REPO_TOKEN || github.token }}
+
+      - uses: docker/setup-buildx-action@v4
+      - name: Start the dashboard stack
+        working-directory: dashboard-v2
+        run: docker compose -f compose.dev.yml up -d --build
+      - name: Start the addon stack
+        working-directory: oakestra-openai-api
+        run: docker compose up -d --build
+      - name: Smoke test
+        working-directory: oakestra-openai-api
+        run: make smoke
+      - name: Logs
+        if: failure()
+        run: |
+          docker compose -f dashboard-v2/compose.dev.yml logs --no-color
+          docker compose -f oakestra-openai-api/compose.yaml logs --no-color
+      - name: Stop the stacks
+        if: always()
+        run: |
+          docker compose -f oakestra-openai-api/compose.yaml down -v
+          docker compose -f dashboard-v2/compose.dev.yml down -v
+
+  build:
+    needs: [checks, addon]
+    runs-on: ubuntu-latest
+    # Only this job pushes images, so the other jobs don't get packages: write. On PRs the token
+    # is never used here: login and push are skipped.
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: oakestra-openai-api
+            context: oakestra-openai-api
+            file: oakestra-openai-api/Dockerfile
+            target: server
+          - image: oakestra-openai-api-fakeoak
+            context: oakestra-openai-api
+            file: oakestra-openai-api/Dockerfile
+            target: fakeoak
+          - image: oakestra-openai-api-addon-ui
+            context: oakestra-openai-api/frontend/addon
+            file: oakestra-openai-api/frontend/addon/Dockerfile
+            dashboard: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: oakestra-openai-api
+
+      - id: ref
+        if: matrix.dashboard
+        run: echo "ref=$(cat oakestra-openai-api/DASHBOARD_REF)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: matrix.dashboard
+        with:
+          repository: oakestra/dashboard-v2
+          ref: ${{ steps.ref.outputs.ref }}
+          path: dashboard-v2
+          token: ${{ secrets.DASHBOARD_REPO_TOKEN || github.token }}
+
+      # No QEMU: the Go images cross-compile on the runner, and the UI build is static files.
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      # The Oakestra marketplace pulls these images on the root orchestrator host, which is often
+      # an ARM board, so both architectures are published.
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          build-contexts: ${{ matrix.dashboard && 'dashboard=dashboard-v2' || '' }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

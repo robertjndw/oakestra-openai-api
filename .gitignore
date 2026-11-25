@@ -1,0 +1,25 @@
+# Build output (make build)
+/bin/
+dist/
+
+# Local runtime state (SQLite)
+/data/
+
+# UI dependencies and build output
+node_modules/
+
+# Test binaries and coverage
+*.test
+*.out
+coverage.*
+*.coverprofile
+
+# Local env files
+.env
+.env.*
+
+# OS / editor noise
+.DS_Store
+/ooa-*
+
+__pycache__/

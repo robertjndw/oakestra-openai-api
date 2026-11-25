@@ -1,0 +1,122 @@
+# Demo stack next to the dashboard's dev stack: a fake Oakestra with three simulated nodes, the
+# backend, the addon UI, and a one-shot that registers the addon at the dashboard's mock addons
+# manager. No GPUs and no real Oakestra: the fake starts a small OpenAI-compatible engine for
+# every deployment.
+#
+# 1. In a dashboard-v2 checkout:   docker compose -f compose.dev.yml up -d --build
+# 2. Here:                         docker compose up -d --build
+# 3. Open http://localhost:8080, log in as Admin / Admin, open "OpenAI API". Or run deploy/smoke.sh.
+#
+# Every service joins the dashboard's network, so service names double as DNS names there; they
+# are prefixed to stay clear of the dashboard's own. The dashboard's nginx reaches the UI as
+# addonui-openai-api (the name the addons engine gives a UI service), and the UI reaches the
+# backend as root_ooa, the name the addons engine gives the "ooa" service on a real Oakestra.
+name: oakestra-openai-api
+
+services:
+  ooa-fakeoak:
+    build:
+      context: .
+      target: fakeoak
+    image: ooa-fakeoak:dev
+    environment:
+      OOA_FAKEOAK_LISTEN: ":10000"
+      OOA_FAKEOAK_CLUSTERS: "1"
+      OOA_FAKEOAK_NODES: "3"
+      # One node without the modelpack CSI driver, to show that placement refuses it.
+      OOA_FAKEOAK_NO_MODELPACK: node3
+      # Nodes report this container's name as their IP and engines listen on every interface,
+      # so the backend reaches each engine at ooa-fakeoak:<host port>.
+      OOA_FAKEOAK_NODE_IP: ooa-fakeoak
+      OOA_FAKEOAK_ENGINE_BIND: 0.0.0.0
+      OOA_FAKEOAK_SPAWN_ENGINES: "true"
+      OOA_FAKEOAK_USER: ooa
+      OOA_FAKEOAK_PASSWORD: ooa-demo
+      OOA_FAKEOAK_PUBLIC_URL: http://ooa-fakeoak:10000
+    ports:
+      # Engine ports (18000-18999) stay unpublished: only the gateway talks to them.
+      # Loopback only: the fake has an unauthenticated control API under /__fake.
+      - "127.0.0.1:${OOA_FAKEOAK_PORT:-10020}:10000"
+    restart: unless-stopped
+
+  ooa-server:
+    build:
+      context: .
+      target: server
+      args:
+        VERSION: ${VERSION:-dev}
+    image: ooa-server:dev
+    depends_on:
+      ooa-fakeoak:
+        condition: service_started
+    networks:
+      default:
+        aliases: [root_ooa]
+    environment:
+      OOA_OAKESTRA_API: http://ooa-fakeoak:10000
+      # The fake's cluster IP has nothing listening on it; its abstractor lives under /cluster/.
+      OOA_CLUSTER_ABSTRACTOR_OVERRIDES: cluster1=http://ooa-fakeoak:10000/cluster/cluster1
+      OOA_OAKESTRA_USER: ooa
+      OOA_OAKESTRA_PASSWORD: ooa-demo
+      # Dashboard tokens come from the mock system manager, which answers /user/<name> like the
+      # real one, so the admin API checks them the same way it would in production.
+      OOA_AUTH_URL: http://mock-system-manager:10000/api
+      OOA_ADMIN_AUTH: introspect
+      OOA_PUBLIC_URL: http://localhost:${OOA_PORT:-8095}
+      # Faster than the default so the demo reacts quickly.
+      OOA_POLL_INTERVAL: 2s
+    volumes:
+      - ooa_data:/data
+    ports:
+      - "${OOA_PORT:-8095}:8080"
+      # The admin API is published on loopback only, for deploy/smoke.sh. The UI reaches it over
+      # the network as root_ooa:8081.
+      - "127.0.0.1:${OOA_ADMIN_PORT:-8096}:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  addonui-openai-api:
+    build:
+      context: ./frontend/addon
+      additional_contexts:
+        dashboard: ${DASHBOARD_DIR:-../dashboard-v2}
+      args:
+        ADDON_NAME: openai-api
+    image: ooa-addon-ui:dev
+    environment:
+      API_UPSTREAM: http://root_ooa:8081
+    restart: unless-stopped
+
+  # One-shot: marks openai-api as an installed, active UI addon at the mock addons manager, then
+  # exits. Safe to run again.
+  ooa-register:
+    image: curlimages/curl:8.17.0
+    depends_on:
+      # The UI must be resolvable before the shell sees the addon and loads it.
+      addonui-openai-api:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 60); do
+          if curl -fsS -X PUT http://mock-addons-manager:11101/__test/addons/openai-api \
+               -H 'Content-Type: application/json' \
+               -d '{"enabled":true,"version":"0.1.0","sdk":"^0.1.0"}'; then
+            echo; echo "openai-api registered"; exit 0
+          fi
+          echo "mock addons manager not ready, retrying ($$i)"; sleep 2
+        done
+        echo "giving up: mock-addons-manager:11101 did not answer"; exit 1
+    restart: "no"
+
+volumes:
+  ooa_data:
+
+networks:
+  default:
+    name: ${DASHBOARD_NETWORK:-oakestra-dashboard-dev_default}
+    external: true

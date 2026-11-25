@@ -1,0 +1,12 @@
+{
+  "sla_version": "v2.0",
+  "customerID": "ooa",
+  "applications": [
+    {
+      "application_name": "openaiapi",
+      "application_namespace": "ooa",
+      "application_desc": "OpenAI-compatible model serving",
+      "microservices": []
+    }
+  ]
+}

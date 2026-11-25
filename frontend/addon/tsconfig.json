@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // The dashboard's packages/tsconfig base.json + react.json, inlined because
+    // @oakestra/tsconfig is internal to that repository (like the create-addon standalone
+    // template).
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // The linked SDK is TypeScript source with explicit `.ts` imports.
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client", "node", "@oakestra/dashboard-sdk/vite/client"],
+    "paths": {
+      // Two React installs meet here: ours and the dashboard checkout's (seen by the linked SDK
+      // and @oakestra/ui sources). Pinning the types to ours keeps ReactNode, ComponentType and
+      // friends identical, otherwise every prop crossing the boundary mismatches.
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
+  },
+  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]
+}

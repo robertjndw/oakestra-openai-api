@@ -1,0 +1,14 @@
+/*
+ * Utilities only, no preflight: the shell already loaded Tailwind's reset and tokens, and a
+ * second reset would clobber its styles.
+ *
+ * Every class is `oai:<utility>` (`oai:flex`, `oai:md:hidden`). This sheet loads after the
+ * shell's, so an unprefixed utility could beat the shell's own classes, and Tailwind happily
+ * generates them from class-like words in comments. Keep the prefix equal to `prefix` in
+ * vite.config.ts.
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(oai);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '@oakestra/ui/theme.css';
+
+@source './';

@@ -1,0 +1,52 @@
+{
+  "sla_version": "v2.0",
+  "customerID": "ooa",
+  "applications": [
+    {
+      "applicationID": "665000000000000000000001",
+      "application_name": "openaiapi",
+      "application_namespace": "ooa",
+      "microservices": [
+        {
+          "microservice_name": "qwen331fd35be",
+          "microservice_namespace": "ooa",
+          "virtualization": "container",
+          "code": "vllm/vllm-openai:v0.29.0",
+          "memory": 24576,
+          "vgpus": 1,
+          "port": "18000:8000",
+          "cmd": [
+            "vllm",
+            "serve",
+            "/model",
+            "--served-model-name",
+            "qwen3-8b",
+            "--port",
+            "8000",
+            "--api-key",
+            "ek-3f9a1c",
+            "--max-model-len",
+            "8192"
+          ],
+          "volumes": [
+            {
+              "volume_id": "d_01kbx7m2c3q4r5s6t7v8w9x0yz",
+              "csi_driver": "model.csi.modelpack.org",
+              "mount_path": "/model",
+              "config": {
+                "model.csi.modelpack.org/reference": "ghcr.io/example/qwen3-8b:v1"
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "type": "direct",
+              "cluster": "cluster1",
+              "node": "gpu-node-1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

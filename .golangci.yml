@@ -1,0 +1,85 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - errorlint
+    - revive
+    - gocritic
+    - contextcheck
+    - nolintlint
+    - unused
+    - ineffassign
+    - modernize
+    - intrange
+    - copyloopvar
+    - usestdlibvars
+    - exhaustive
+    - usetesting
+  settings:
+    # A switch over an enum (deployment state, auth mode, ...) must name every
+    # value or have a default, so adding a value fails lint at each switch
+    # that would silently drop it.
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    # t.Context() is cancelled when the test ends, so whatever a test starts
+    # with it stops there instead of leaking into later tests.
+    usetesting:
+      context-background: true
+      context-todo: true
+
+    govet:
+      enable-all: true
+      disable:
+        # Packing micro-optimisation that fights readable field order.
+        - fieldalignment
+        # Shadowing err in nested scopes is idiomatic and almost always fine.
+        - shadow
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: receiver-naming
+        - name: context-as-argument
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+  exclusions:
+    warn-unused: true
+    presets:
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/robertjndw/oakestra-openai-api

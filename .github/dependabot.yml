@@ -1,0 +1,46 @@
+version: 2
+
+# One PR per side: Go modules and Dockerfile bumps land together, as do the UI packages.
+multi-ecosystem-groups:
+  backend:
+    schedule:
+      interval: monthly
+  frontend:
+    schedule:
+      interval: monthly
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    patterns: ["*"]
+    multi-ecosystem-group: backend
+
+  # Pinned tool versions (golangci-lint, govulncheck) live in their own module.
+  - package-ecosystem: gomod
+    directory: /tools
+    patterns: ["*"]
+    multi-ecosystem-group: backend
+
+  - package-ecosystem: docker
+    directory: /
+    patterns: ["*"]
+    multi-ecosystem-group: backend
+
+  # npm picks up pnpm-lock.yaml
+  - package-ecosystem: npm
+    directory: /frontend/addon
+    patterns: ["*"]
+    multi-ecosystem-group: frontend
+
+  - package-ecosystem: docker
+    directory: /frontend/addon
+    patterns: ["*"]
+    multi-ecosystem-group: frontend
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

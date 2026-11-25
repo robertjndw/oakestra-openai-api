@@ -1,0 +1,14 @@
+# The Go images copy only go.mod, go.sum, cmd/ and internal/; a small context starts every
+# build faster. The UI image has its own context (frontend/addon).
+.git
+.github
+bin
+data
+frontend
+tools
+deploy
+**/node_modules
+**/dist
+.env
+.env.*
+/ooa-*
