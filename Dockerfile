@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 
 # Alpine rather than distroless so the compose healthcheck has wget. /data is created owned by
 # the runtime user: a fresh named volume copies that ownership, so SQLite can write without root.
-FROM alpine:3.22 AS server
+FROM alpine:3.24 AS server
 RUN adduser -D -H -u 10001 ooa \
  && mkdir /data && chown ooa:ooa /data
 COPY --from=build-server /out/ooa-server /usr/local/bin/ooa-server
