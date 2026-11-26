@@ -11,11 +11,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenuItem,
   EmptyState,
   Input,
   Label,
   PageHeader,
   QueryErrorAlert,
+  RowMenu,
   Skeleton,
   Table,
   TableBody,
@@ -24,11 +26,11 @@ import {
   TableHeader,
   TableRow,
 } from '@oakestra/ui';
-import { KeyRoundIcon, PlusIcon } from 'lucide-react';
+import { KeyRoundIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { useCreateKey, useDeleteKey, useIsAdmin, useKeys } from '../api';
-import { formatTime } from '../lib';
+import { formatRelative, formatTime } from '../lib';
 import type { CreatedKey, Key } from '../types';
 
 function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -54,16 +56,17 @@ function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <DialogTitle>Key {created.key.name} created</DialogTitle>
               <DialogDescription>Copy the secret now.</DialogDescription>
             </DialogHeader>
-            <Alert>
+            <Alert variant="warning">
+              <TriangleAlertIcon aria-hidden />
               <AlertTitle>This secret will not be shown again</AlertTitle>
               <AlertDescription>
                 Only a hash is stored. If you lose it, revoke the key and create a new one.
               </AlertDescription>
             </Alert>
-            <div className="oai:flex oai:items-center oai:gap-2">
+            <div className="oai:flex oai:items-start oai:gap-2 oai:rounded-md oai:border oai:bg-muted oai:p-2 oai:pl-3">
               <code
                 data-testid="key-secret"
-                className="oai:min-w-0 oai:flex-1 oai:break-all oai:rounded-md oai:bg-muted oai:px-3 oai:py-2 oai:text-sm"
+                className="oai:min-w-0 oai:flex-1 oai:py-1 oai:font-mono oai:text-sm oai:break-all oai:select-all"
               >
                 {created.secret}
               </code>
@@ -92,6 +95,8 @@ function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. editor-plugin"
+                autoFocus
+                autoComplete="off"
                 required
               />
             </div>
@@ -102,7 +107,7 @@ function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             ) : null}
             <DialogFooter>
               <Button type="submit" disabled={!name.trim() || create.isPending}>
-                Create key
+                {create.isPending ? 'Creating...' : 'Create key'}
               </Button>
             </DialogFooter>
           </form>
@@ -125,7 +130,7 @@ export function KeysPage() {
         title="API keys"
         description="Clients send a key as a bearer token to the OpenAI endpoint."
         actions={
-          admin ? (
+          admin && keys.data?.length ? (
             <Button onClick={() => setCreating(true)}>
               <PlusIcon aria-hidden /> Create key
             </Button>
@@ -145,38 +150,57 @@ export function KeysPage() {
           icon={<KeyRoundIcon />}
           title="No API keys yet"
           description="Create a key to let a client call the endpoint."
+          action={
+            admin ? (
+              <Button onClick={() => setCreating(true)}>
+                <PlusIcon aria-hidden /> Create key
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Key</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Last used</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {keys.data.map((key) => (
-              <TableRow key={key.id}>
-                <TableCell className="oai:font-medium">{key.name}</TableCell>
-                <TableCell>
-                  <code>{key.prefix}...</code>
-                </TableCell>
-                <TableCell>{formatTime(key.created_at)}</TableCell>
-                <TableCell>{formatTime(key.last_used_at)}</TableCell>
-                <TableCell className="oai:text-right">
-                  {admin ? (
-                    <Button variant="outline" size="sm" onClick={() => setRevoking(key)}>
-                      Revoke
-                    </Button>
-                  ) : null}
-                </TableCell>
+        <div className="oai:overflow-hidden oai:rounded-lg oai:border oai:bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Key</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Last used</TableHead>
+                <TableHead className="oai:w-10">
+                  <span className="oai:sr-only">Actions</span>
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {keys.data.map((key) => (
+                <TableRow key={key.id}>
+                  <TableCell className="oai:font-medium">{key.name}</TableCell>
+                  <TableCell>
+                    <code className="oai:font-mono oai:text-xs oai:text-muted-foreground">{key.prefix}...</code>
+                  </TableCell>
+                  <TableCell className="oai:text-muted-foreground">
+                    <time dateTime={new Date(key.created_at).toISOString()} title={formatTime(key.created_at)}>
+                      {formatRelative(key.created_at)}
+                    </time>
+                  </TableCell>
+                  <TableCell className="oai:text-muted-foreground">
+                    <span title={formatTime(key.last_used_at)}>{formatRelative(key.last_used_at)}</span>
+                  </TableCell>
+                  <TableCell className="oai:text-right">
+                    {admin ? (
+                      <RowMenu label={`Actions for ${key.name}`}>
+                        <DropdownMenuItem variant="destructive" onSelect={() => setRevoking(key)}>
+                          <Trash2Icon aria-hidden /> Revoke
+                        </DropdownMenuItem>
+                      </RowMenu>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       <CreateKeyDialog open={creating} onOpenChange={setCreating} />

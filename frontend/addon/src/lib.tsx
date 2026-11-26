@@ -1,9 +1,11 @@
-import { StatusBadge, type StatusTone } from '@oakestra/ui';
+import { formatRelativeTime, StatusBadge, type StatusTone } from '@oakestra/ui';
 
 import type { DeploymentState } from './types';
 
 export function formatMb(mb: number): string {
-  return mb >= 1024 ? `${(mb / 1024).toFixed(mb >= 10 * 1024 ? 0 : 1)} GB` : `${mb} MB`;
+  if (mb < 1024) return `${mb} MB`;
+  // One decimal below 10 GB, but 2048 reads as "2 GB", not "2.0 GB".
+  return `${(mb / 1024).toFixed(mb >= 10 * 1024 ? 0 : 1).replace(/\.0$/, '')} GB`;
 }
 
 export function formatTime(ms: number | null): string {
@@ -36,3 +38,8 @@ export const splitLines = (text: string): string[] =>
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+
+/** Compact "5 minutes ago" for tables; pair it with `formatTime` in a title for the exact moment. */
+export function formatRelative(ms: number | null): string {
+  return ms === null ? 'never' : formatRelativeTime(ms);
+}
