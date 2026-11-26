@@ -1,6 +1,6 @@
 module github.com/robertjndw/oakestra-openai-api
 
-go 1.26.0
+go 1.26.11
 
 require (
 	github.com/caarlos0/env/v11 v11.4.2
