@@ -1,6 +1,35 @@
-import { Button } from '@oakestra/ui';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@oakestra/ui';
 import { MaximizeIcon, MinusIcon, PlusIcon } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type PointerEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
+
+/** A kit tooltip around one focusable element, for icon buttons and terse badges. */
+export function Hint({
+  label,
+  side = 'top',
+  children,
+}: {
+  label: ReactNode;
+  side?: ComponentProps<typeof TooltipContent>['side'];
+  children: ReactElement;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} sideOffset={6} className="oai:max-w-72">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface View {
   x: number;
@@ -144,19 +173,50 @@ export function Canvas({
       </div>
       <div className="oai:pointer-events-none oai:absolute oai:inset-0 oai:cursor-default oai:text-foreground">
         {overlay}
-        <div className="oai:pointer-events-auto oai:absolute oai:bottom-4 oai:left-4 oai:flex oai:items-center oai:gap-1 oai:rounded-lg oai:border oai:bg-card oai:p-1 oai:shadow-lg">
-          <Button size="icon-sm" variant="ghost" aria-label="Zoom out" onClick={() => zoomCentered(1 / 1.25)}>
-            <MinusIcon aria-hidden />
-          </Button>
-          <span className="oai:w-10 oai:text-center oai:text-xs oai:tabular-nums">
-            {Math.round(view.scale * 100)}%
-          </span>
-          <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoomCentered(1.25)}>
-            <PlusIcon aria-hidden />
-          </Button>
-          <Button size="icon-sm" variant="ghost" aria-label="Fit to screen" onClick={fit}>
-            <MaximizeIcon aria-hidden />
-          </Button>
+        <div
+          role="toolbar"
+          aria-label="Zoom"
+          className="oai:pointer-events-auto oai:absolute oai:bottom-4 oai:left-4 oai:flex oai:items-center oai:gap-0.5 oai:rounded-xl oai:border oai:bg-card oai:p-1 oai:shadow-lg"
+        >
+          <Hint label="Zoom out">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Zoom out"
+              disabled={view.scale <= MIN_SCALE}
+              onClick={() => zoomCentered(1 / 1.25)}
+            >
+              <MinusIcon aria-hidden />
+            </Button>
+          </Hint>
+          <Hint label="Reset to 100%">
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Zoom ${Math.round(view.scale * 100)}%, reset to 100%`}
+              className="oai:w-12 oai:px-0 oai:text-xs oai:tabular-nums"
+              onClick={() => zoomCentered(1 / view.scale)}
+            >
+              {Math.round(view.scale * 100)}%
+            </Button>
+          </Hint>
+          <Hint label="Zoom in">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Zoom in"
+              disabled={view.scale >= MAX_SCALE}
+              onClick={() => zoomCentered(1.25)}
+            >
+              <PlusIcon aria-hidden />
+            </Button>
+          </Hint>
+          <div aria-hidden className="oai:mx-0.5 oai:h-5 oai:w-px oai:bg-border" />
+          <Hint label="Fit to screen">
+            <Button size="icon-sm" variant="ghost" aria-label="Fit to screen" onClick={fit}>
+              <MaximizeIcon aria-hidden />
+            </Button>
+          </Hint>
         </div>
       </div>
     </div>

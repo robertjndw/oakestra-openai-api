@@ -173,10 +173,11 @@ export const useSettings = () => {
 };
 
 // A failed mutation is toasted by the shell's MutationCache with meta.errorMessage as the title.
+// Leave errorMessage out when the caller renders the failure itself, so it is not shown twice.
 function useApiMutation<V, R>(
   run: (client: Client, variables: V) => Promise<R>,
   options: {
-    errorMessage: string;
+    errorMessage?: string;
     invalidate: string[];
     success?: (result: R, variables: V) => string;
   },
@@ -186,7 +187,7 @@ function useApiMutation<V, R>(
   const notify = useNotify();
   return useMutation({
     mutationFn: (variables: V) => run(client, variables),
-    meta: { errorMessage: options.errorMessage },
+    meta: options.errorMessage ? { errorMessage: options.errorMessage } : { silent: true },
     onSuccess: async (result, variables) => {
       await Promise.all(
         options.invalidate.map((part) => queryClient.invalidateQueries({ queryKey: key(part) })),
@@ -201,7 +202,7 @@ export const useSaveModel = () =>
     (c, v: { id?: string; input: ModelInput }) =>
       v.id ? c.updateModel(v.id, v.input) : c.createModel(v.input),
     {
-      errorMessage: 'Could not save the model',
+      // The model dialog shows the failure next to the form it belongs to.
       invalidate: ['models', 'overview'],
       success: (model) => `Model ${model.name} saved`,
     },

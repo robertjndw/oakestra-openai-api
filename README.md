@@ -139,7 +139,7 @@ Errors use the OpenAI shape `{"error":{"message","type","param","code"}}`:
 | Engine image | Container image of the engine. Empty means `OOA_DEFAULT_ENGINE_IMAGE` (vLLM). |
 | Extra engine arguments | One per line, appended to the engine command. |
 | Command override | Optional argv, one element per line, for engines other than vLLM. |
-| Memory (MB), GPUs | Resources requested in the SLA. |
+| Memory, GPUs | Resources requested in the SLA. Memory is entered in GB or MB. |
 | Eligible for auto | Whether `auto` may route to this model. |
 
 Without a command override the engine runs
